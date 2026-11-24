@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Remote Compose Lab editor</title>
+<style>
+body{font-family:system-ui,sans-serif;max-width:520px;margin:24px auto;padding:0 16px;color:#1b1b1f}
+label{display:block;margin-top:14px;font-size:13px;color:#555}
+input,select,button{width:100%;box-sizing:border-box;padding:10px;font-size:16px;margin-top:4px}
+input[type=color]{height:44px;padding:2px}
+button{background:#1e88e5;color:#fff;border:0;border-radius:8px;margin-top:20px}
+#preview{margin-top:20px;border-radius:14px;padding:28px;color:#fff;text-align:center}
+#st{margin-top:12px;font-size:13px;color:#444;white-space:pre-wrap}
+</style></head><body>
+<h2>Remote Compose Lab</h2>
+<p>Edit the native UI on your phone. Publish writes a spec to Firestore; the app re-authors the Remote Compose document and swaps it live.</p>
+<label>Template<select id="tpl"><option value="card">Card</option><option value="counter">Counter (state inside the document)</option><option value="pulse">Pulse (animation)</option></select></label>
+<label>Title<input id="title" value="Edited from the web"></label>
+<label>Subtitle<input id="sub" value="No app release needed"></label>
+<label>Accent color<input id="acc" type="color" value="#1e88e5"></label>
+<label>Edit key<input id="key" type="password" placeholder="rclab-2026" autocomplete="off"></label>
+<div id="preview"></div>
+<button id="go">Publish to phone</button>
+<div id="st"></div>
+<script>
+const URL_="https://firestore.googleapis.com/v1/projects/remote-compose-lab-1d079/databases/(default)/documents/demo/ui";
+const $=i=>document.getElementById(i);
+function prev(){const p=$("preview");p.style.background=$("acc").value;p.innerHTML="";const a=document.createElement("div");a.style.cssText="font-size:26px;font-weight:700";a.textContent=$("title").value;const b=document.createElement("div");b.style.opacity=.8;b.textContent=$("sub").value;p.append(a,b)}
+["title","sub","acc","tpl"].forEach(i=>$(i).addEventListener("input",prev));prev();
+$("go").onclick=async()=>{
+  const st=$("st");st.textContent="publishing...";
+  try{
+    let v=0;
+    const cur=await fetch(URL_);
+    if(cur.ok){v=parseInt((await cur.json()).fields.version.integerValue)||0}
+    v+=1;
+    const s=x=>({stringValue:x});
+    const body={fields:{template:s($("tpl").value),title:s($("title").value),subtitle:s($("sub").value),accent:s($("acc").value),version:{integerValue:String(v)},editKey:s($("key").value)}};
+    const r=await fetch(URL_,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    st.textContent=r.ok?"Published version "+v+". The phone picks it up within ~2 seconds.":"Rejected ("+r.status+"). Check the edit key and field lengths.";
+  }catch(e){st.textContent="Error: "+e}
+};
+</script></body></html>
