@@ -50,6 +50,8 @@ import kotlinx.coroutines.withContext
 
 const val LOCAL_URL = "http://127.0.0.1:8765/doc.rc"
 const val PLAYER_HEIGHT_DP = 320
+const val FIRESTORE_URL =
+    "https://firestore.googleapis.com/v1/projects/remote-compose-lab-1d079/databases/(default)/documents/demo/ui"
 
 class MainActivity : ComponentActivity() {
     private val server = DocServer()
@@ -76,6 +78,45 @@ fun LabScreen(server: DocServer) {
     var loadNow by remember { mutableIntStateOf(0) }
     var etag by remember { mutableStateOf<String?>(null) }
     var loads by remember { mutableIntStateOf(0) }
+
+    var cloudMode by remember { mutableStateOf(true) }
+    var cloudStatus by remember { mutableStateOf("cloud: not checked yet") }
+
+    // Cloud mode: poll the spec the web editor writes to Firestore, then re-author the document locally.
+    LaunchedEffect(cloudMode) {
+        var lastVersion = -1
+        while (cloudMode) {
+            val now = SimpleDateFormat("HH:mm:ss", Locale.US).format(Date())
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val c = URL(FIRESTORE_URL).openConnection() as HttpURLConnection
+                    c.connectTimeout = 5000
+                    c.readTimeout = 5000
+                    if (c.responseCode != 200) error("HTTP ${c.responseCode}")
+                    val f = org.json.JSONObject(c.inputStream.readBytes().decodeToString()).getJSONObject("fields")
+                    fun str(k: String) = f.getJSONObject(k).getString("stringValue")
+                    DocSpec(
+                        template = when (str("template")) {
+                            "counter" -> Template.COUNTER
+                            "pulse" -> Template.PULSE
+                            else -> Template.CARD
+                        },
+                        title = str("title"),
+                        subtitle = str("subtitle"),
+                        accent = 0xFF000000L or str("accent").removePrefix("#").toLong(16),
+                        version = f.getJSONObject("version").getString("integerValue").toInt(),
+                    )
+                }
+            }.onSuccess {
+                if (it.version != lastVersion) {
+                    lastVersion = it.version
+                    spec = it
+                    cloudStatus = "cloud: applied spec v${it.version} at $now"
+                } else cloudStatus = "cloud: no change, checked $now"
+            }.onFailure { cloudStatus = "cloud: failed at $now: ${it.message}" }
+            delay(2000)
+        }
+    }
 
     val player = remember {
         RemoteComposePlayer(context).also { p ->
@@ -137,6 +178,11 @@ fun LabScreen(server: DocServer) {
             AndroidView(factory = { player }, modifier = Modifier.fillMaxSize())
         }
         Text(status, style = MaterialTheme.typography.bodySmall)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Switch(cloudMode, { cloudMode = it })
+            Text("Follow the web editor (Firestore)")
+        }
+        Text(cloudStatus, style = MaterialTheme.typography.bodySmall)
         Text("Last callback from document: $lastAction", style = MaterialTheme.typography.bodySmall)
 
         Text("Player: where the document comes from", style = MaterialTheme.typography.titleSmall)
