@@ -16,4 +16,6 @@ No personal data is used.
 (template, title, subtitle, accent) to Firestore document `demo/ui`. The app, with
 "Follow the web editor" on, polls that document every 2 seconds, re-authors the Remote Compose
 document with the creation library and swaps it in the player. Firestore rules allow public
-read and only validated writes carrying the demo edit key. The key is not a real secret; this is a demo.
+read and only validated writes carrying the demo edit key (exactly the six spec fields, title
+shorter than 80 chars, subtitle shorter than 200, template card/counter/pulse). The key is not
+a real secret; this is a demo.
